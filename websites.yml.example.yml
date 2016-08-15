@@ -1,0 +1,9 @@
+- URL: http://example.com
+  ContainString: asd
+  Timeout: 1m12s
+- URL: https://example2.com
+  ContainString: fff
+  SendTo:
+  - asd@mail.com
+  - test@gmail.com
+  - sss@ya.ru

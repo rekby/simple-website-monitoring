@@ -1,0 +1,9 @@
+EmailFrom: from@mail.ru
+EmailSmtpHost: smtp.mail.ru
+EmailSmtpPort: "25"
+EmailSmtpLogin: from@mail.ru
+EmailSmtpPassword: "1234"
+SendTo:
+- aaa@bbb.com
+- ccc@ddd.com
+Timeout: 10s
