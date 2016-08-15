@@ -86,7 +86,7 @@ func checkWebsite(systemConfig System, website WebSite){
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if !bytes.Contains(body, []byte(website.ContainString)) {
-		notify(systemConfig, website, "ERROR: " + website.URL, "Не найдена строка:\n" + website.ContainString)
+		notify(systemConfig, website, "ERROR: " + website.URL, "It doesn't find the string:\n" + website.ContainString)
 		return
 	}
 }
