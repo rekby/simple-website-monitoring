@@ -17,6 +17,7 @@ type WebSite struct {
 	ContainString string `yaml:"ContainString"`
 	SendTo        []string `yaml:"SendTo,omitempty"`
 	Timeout time.Duration `yaml:"Timeout,omitempty"`
+	Description string `yaml:"Description"`
 }
 
 type Status struct {

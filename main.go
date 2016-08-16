@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"net/smtp"
 	"strings"
-	"net/mail"
 	"log"
 	"bytes"
 )
@@ -111,11 +110,16 @@ func createTemplateConfigs(){
 	website1.URL = "http://example.com"
 	website1.ContainString = "asd"
 	website1.Timeout = 72 * time.Second
+	website1.Description = "Short description"
+	website1.SendTo = []string{"asd@mail.com", "test@gmail.com", "sss@ya.ru"}
 
 	var website2 WebSite
 	website2.URL = "https://example2.com"
 	website2.ContainString = "fff"
-	website2.SendTo = []string{"asd@mail.com", "test@gmail.com", "sss@ya.ru"}
+	website2.Description = `Long text description
+with newlines
+many
+times`
 
 	websites := []WebSite{website1, website2}
 	out, err = yaml.Marshal(websites)
@@ -126,12 +130,12 @@ func createTemplateConfigs(){
 }
 
 func notify(system System, website WebSite, subject, body string){
+	body += "\n\n" + website.Description
 
-	emails := website.SendTo
-	if len(emails) == 0 {
-		emails = system.SendTo
-	}
+	sendEmails(system, summStringsArrays(system.SendTo, website.SendTo), subject, body)
+}
 
+func sendEmails(system System, emails []string, subject, body string){
 	message := `From: ` + system.EmailFrom + "\n"
 	message += "To: " + strings.Join(emails, ",") + "\n"
 	message += "Subject: " + subject + "\n"
@@ -147,9 +151,21 @@ func notify(system System, website WebSite, subject, body string){
 	}
 }
 
-func encodeRFC2047(String string) string{
-	// use mail's rfc2047 to encode any string
-	// copy from https://gist.github.com/andelf/5004821
-	addr := mail.Address{String, ""}
-	return strings.Trim(addr.String(), " <>")
+/*
+Combine all strings from sarrs without duplicates.
+Order of strings undefined.
+ */
+func summStringsArrays(sarrs ...[]string) []string {
+	sMap := make(map[string]bool)
+	for _, arr := range sarrs {
+		for _, s := range arr {
+			sMap[s] = true
+		}
+	}
+
+	res := make([]string, 0, len(sMap))
+	for k := range sMap {
+		res = append(res, k)
+	}
+	return res
 }
