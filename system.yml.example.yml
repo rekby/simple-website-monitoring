@@ -6,4 +6,7 @@ EmailSmtpPassword: "1234"
 SendTo:
 - aaa@bbb.com
 - ccc@ddd.com
+SendStatisticTo:
+- aaa@bbb.com
+- asdf@bbb.org
 Timeout: 10s

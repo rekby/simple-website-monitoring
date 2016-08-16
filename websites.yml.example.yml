@@ -4,10 +4,14 @@
   - asd@mail.com
   - test@gmail.com
   - sss@ya.ru
+  SendStatisticTo:
+  - asd@mail.com
+  - bob@jack.com
   Timeout: 1m12s
   Description: Short description
 - URL: https://example2.com
   ContainString: fff
+  SendStatisticTo: []
   Description: |-
     Long text description
     with newlines

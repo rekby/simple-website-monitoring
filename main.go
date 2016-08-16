@@ -1,23 +1,24 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
-	"os"
-	"sync"
-	"time"
+	"log"
 	"net/http"
 	"net/smtp"
+	"os"
 	"strings"
-	"log"
-	"bytes"
+	"sync"
+	"time"
+	"fmt"
 )
 
 const (
-	SystemConfigFileName = "system.yml"
+	SystemConfigFileName   = "system.yml"
 	WebsitesConfigFileName = "websites.yml"
-	StatisticFileName = "stat.yml"
+	StatisticFileName      = "stat.yml"
 )
 
 var (
@@ -27,9 +28,10 @@ var (
 var (
 	systemConfig System
 	globalStatus Status
+	websitesConfig []WebSite
 )
 
-func main(){
+func main() {
 	flag.Parse()
 	if *flagCreateTemplateConfigs {
 		createTemplateConfigs()
@@ -57,7 +59,7 @@ func main(){
 		log.Println("Can't read websites config: " + WebsitesConfigFileName + "\n" + err.Error())
 		return
 	}
-	var websitesConfig []WebSite
+
 	err = yaml.Unmarshal(bytesArr, &websitesConfig)
 	if err != nil {
 		createTemplateConfigs()
@@ -74,9 +76,9 @@ func main(){
 	}
 
 	var wait sync.WaitGroup
-	for _, website := range websitesConfig{
+	for _, website := range websitesConfig {
 		wait.Add(1)
-		go func(){
+		go func() {
 			checkWebsite(website)
 			wait.Done()
 		}()
@@ -84,7 +86,14 @@ func main(){
 
 	wait.Wait()
 
+	// If doesn't sent statistic today
+	if globalStatus.LastTimeSendStatistic.YearDay() != time.Now().YearDay() {
+		sendStatistic()
+	}
+
 	// save statistic
+	globalStatus.Clean()
+
 	bytesArr, err = yaml.Marshal(globalStatus)
 	if err != nil {
 		log.Println("Error while marshal statistic:", err)
@@ -95,7 +104,7 @@ func main(){
 	}
 }
 
-func checkWebsite(website WebSite){
+func checkWebsite(website WebSite) {
 	httpClient := http.Client{}
 
 	httpClient.Timeout = website.Timeout
@@ -104,21 +113,21 @@ func checkWebsite(website WebSite){
 	}
 	resp, err := httpClient.Get(website.URL)
 	if err != nil {
-		notify(false, website, "ERROR: " + website.URL, "Can't get page:\n" + err.Error())
+		notify(false, website, "ERROR: "+website.URL, "Can't get page:\n"+err.Error())
 		return
 	}
 	defer resp.Body.Close()
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if !bytes.Contains(body, []byte(website.ContainString)) {
-		notify(false, website, "ERROR: " + website.URL, "It doesn't find the string:\n" + website.ContainString)
+		notify(false, website, "ERROR: "+website.URL, "It doesn't find the string:\n"+website.ContainString)
 		return
 	}
 
-	notify(true, website, "OK: " + website.URL, "OK")
+	notify(true, website, "OK: "+website.URL, "OK")
 }
 
-func createTemplateConfigs(){
+func createTemplateConfigs() {
 	var system System
 	system.EmailFrom = "from@mail.ru"
 	system.EmailSmtpHost = "smtp.mail.ru"
@@ -127,12 +136,13 @@ func createTemplateConfigs(){
 	system.EmailSmtpPassword = "1234"
 	system.Timeout = time.Second * 10
 	system.SendTo = []string{"aaa@bbb.com", "ccc@ddd.com"}
+	system.SendStatisticTo = []string{"aaa@bbb.com", "asdf@bbb.org"}
 
 	out, err := yaml.Marshal(system)
 	if err != nil {
 		panic(err)
 	}
-	ioutil.WriteFile(SystemConfigFileName + ".example.yml", out, 0600)
+	ioutil.WriteFile(SystemConfigFileName+".example.yml", out, 0600)
 
 	var website1 WebSite
 	website1.URL = "http://example.com"
@@ -140,6 +150,7 @@ func createTemplateConfigs(){
 	website1.Timeout = 72 * time.Second
 	website1.Description = "Short description"
 	website1.SendTo = []string{"asd@mail.com", "test@gmail.com", "sss@ya.ru"}
+	website1.SendStatisticTo = []string{"asd@mail.com", "bob@jack.com"}
 
 	var website2 WebSite
 	website2.URL = "https://example2.com"
@@ -154,13 +165,15 @@ times`
 	if err != nil {
 		panic(err)
 	}
-	ioutil.WriteFile(WebsitesConfigFileName + ".example.yml", out, 0600)
+	ioutil.WriteFile(WebsitesConfigFileName+".example.yml", out, 0600)
 }
 
-func notify(ok bool, website WebSite, subject, body string){
+func notify(ok bool, website WebSite, subject, body string) {
 	globalStatus.mutex.Lock()
 	state := globalStatus.Websites[website.URL]
 	globalStatus.mutex.Unlock()
+
+	state.LastCheckTime = time.Now()
 
 	if state.OK != ok || !state.NotFirstTime {
 		state.OK = ok
@@ -169,17 +182,15 @@ func notify(ok bool, website WebSite, subject, body string){
 		state.SubjectMessages = append(state.SubjectMessages, subject)
 		state.NotFirstTime = true
 
-		globalStatus.mutex.Lock()
-		globalStatus.Websites[website.URL] = state
-		globalStatus.mutex.Unlock()
-
-
 		body += "\n\n" + website.Description
 		sendEmails(summStringsArrays(systemConfig.SendTo, website.SendTo), subject, body)
 	}
+	globalStatus.mutex.Lock()
+	globalStatus.Websites[website.URL] = state
+	globalStatus.mutex.Unlock()
 }
 
-func sendEmails(emails []string, subject, body string){
+func sendEmails(emails []string, subject, body string) {
 	message := `From: ` + systemConfig.EmailFrom + "\n"
 	message += "To: " + strings.Join(emails, ",") + "\n"
 	message += "Subject: " + subject + "\n"
@@ -190,16 +201,42 @@ func sendEmails(emails []string, subject, body string){
 	auth := smtp.PlainAuth("", systemConfig.EmailSmtpLogin, systemConfig.EmailSmtpPassword, systemConfig.EmailSmtpHost)
 	log.Println("Send email to:", emails)
 	log.Println(systemConfig.EmailSmtpHost + ":" + systemConfig.EmailSmtpPort)
-	err := smtp.SendMail(systemConfig.EmailSmtpHost + ":" + systemConfig.EmailSmtpPort, auth, systemConfig.EmailFrom, emails, []byte(message))
+	err := smtp.SendMail(systemConfig.EmailSmtpHost+":"+systemConfig.EmailSmtpPort, auth, systemConfig.EmailFrom, emails, []byte(message))
 	if err != nil {
 		log.Println("Can't send email:", err)
+	}
+}
+
+func sendStatistic() {
+	messages := make(map[string]string)
+
+	globalStatus.mutex.Lock()
+	for _, website := range websitesConfig {
+		state := globalStatus.Websites[website.URL]
+
+		stringOk := "OK"
+		if !state.OK {
+			stringOk = "FAILED"
+		}
+		appendMessage := fmt.Sprintf("Website: %v; State: %v; Last check: %v; Messages: %v\n", website.URL, stringOk,
+			state.LastCheckTime, strings.Join(state.TextMessages, ", "))
+
+		for _, email := range summStringsArrays(systemConfig.SendStatisticTo, website.SendStatisticTo) {
+			messages[email] = messages[email] + appendMessage
+		}
+	}
+	globalStatus.LastTimeSendStatistic = time.Now()
+	globalStatus.mutex.Unlock()
+
+	for email, mess := range messages {
+		sendEmails([]string{email}, "MONITORING STAT", mess)
 	}
 }
 
 /*
 Combine all strings from sarrs without duplicates.
 Order of result strings undefined.
- */
+*/
 func summStringsArrays(sarrs ...[]string) []string {
 	sMap := make(map[string]bool)
 	for _, arr := range sarrs {
