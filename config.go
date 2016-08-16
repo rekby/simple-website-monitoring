@@ -1,6 +1,9 @@
 package main
 
-import "time"
+import (
+	"time"
+	"sync"
+)
 
 type System struct {
 	EmailFrom         string `yaml:"EmailFrom"`
@@ -20,6 +23,22 @@ type WebSite struct {
 	Description string `yaml:"Description"`
 }
 
-type Status struct {
+type WebSiteStatus struct {
+	TextMessages []string
+	SubjectMessages []string
+	TimeMessages []time.Time
+	OK bool
+	NotFirstTime bool
+}
 
+type Status struct {
+	mutex sync.Mutex
+	Websites map[string] WebSiteStatus
+}
+
+func (this *Status) Reset(){
+	this.mutex.Lock()
+	defer this.mutex.Unlock()
+
+	this.Websites = make(map[string]WebSiteStatus)
 }

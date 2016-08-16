@@ -15,12 +15,18 @@ import (
 )
 
 const (
-	SystemConfig = "system.yml"
-	WebsitesConfig = "websites.yml"
+	SystemConfigFileName = "system.yml"
+	WebsitesConfigFileName = "websites.yml"
+	StatisticFileName = "stat.yml"
 )
 
 var (
 	flagCreateTemplateConfigs = flag.Bool("create-template-configs", false, "Write to workdir example of config files")
+)
+
+var (
+	systemConfig System
+	globalStatus Status
 )
 
 func main(){
@@ -30,46 +36,66 @@ func main(){
 		return
 	}
 
-	readBytes, err := ioutil.ReadFile(SystemConfig)
+	bytesArr, err := ioutil.ReadFile(SystemConfigFileName)
 	if err != nil {
 		createTemplateConfigs()
-		os.Stderr.WriteString("Can't read system config: " + SystemConfig + "\n" + err.Error() + "\n")
+		os.Stderr.WriteString("Can't read system config: " + SystemConfigFileName + "\n" + err.Error() + "\n")
 		return
 	}
-	var systemConfig System
-	err = yaml.Unmarshal(readBytes, &systemConfig)
+
+	// read system config
+	err = yaml.Unmarshal(bytesArr, &systemConfig)
 	if err != nil {
 		createTemplateConfigs()
-		os.Stderr.WriteString("Can't parse system config: " + SystemConfig + "\n" + err.Error() + "\n")
+		os.Stderr.WriteString("Can't parse system config: " + SystemConfigFileName + "\n" + err.Error() + "\n")
 	}
 
-	readBytes, err = ioutil.ReadFile(WebsitesConfig)
+	// read websites config
+	bytesArr, err = ioutil.ReadFile(WebsitesConfigFileName)
 	if err != nil {
 		createTemplateConfigs()
-		os.Stderr.WriteString("Can't read websites config: " + WebsitesConfig + "\n" + err.Error() + "\n")
+		log.Println("Can't read websites config: " + WebsitesConfigFileName + "\n" + err.Error())
 		return
 	}
 	var websitesConfig []WebSite
-	err = yaml.Unmarshal(readBytes, &websitesConfig)
+	err = yaml.Unmarshal(bytesArr, &websitesConfig)
 	if err != nil {
 		createTemplateConfigs()
-		os.Stderr.WriteString("Can't parse websites config: " + WebsitesConfig + "\n" + err.Error() + "\n")
+		log.Println("Can't parse websites config: " + WebsitesConfigFileName + "\n" + err.Error())
 		return
+	}
+
+	// read statistic, ignore errors
+	bytesArr, _ = ioutil.ReadFile(StatisticFileName)
+	yaml.Unmarshal(bytesArr, &globalStatus)
+	bytesArr = nil
+	if globalStatus.Websites == nil {
+		globalStatus.Websites = make(map[string]WebSiteStatus)
 	}
 
 	var wait sync.WaitGroup
 	for _, website := range websitesConfig{
 		wait.Add(1)
 		go func(){
-			checkWebsite(systemConfig, website)
+			checkWebsite(website)
 			wait.Done()
 		}()
 	}
 
 	wait.Wait()
+
+	// save statistic
+	bytesArr, err = yaml.Marshal(globalStatus)
+	if err != nil {
+		log.Println("Error while marshal statistic:", err)
+	}
+	err = ioutil.WriteFile(StatisticFileName, bytesArr, 0600)
+	if err != nil {
+		log.Println("Error while save statistic:", err)
+	}
 }
 
-func checkWebsite(systemConfig System, website WebSite){
+func checkWebsite(website WebSite){
 	httpClient := http.Client{}
 
 	httpClient.Timeout = website.Timeout
@@ -78,16 +104,18 @@ func checkWebsite(systemConfig System, website WebSite){
 	}
 	resp, err := httpClient.Get(website.URL)
 	if err != nil {
-		notify(systemConfig, website, "ERROR: " + website.URL, "Can't get page:\n" + err.Error())
+		notify(false, website, "ERROR: " + website.URL, "Can't get page:\n" + err.Error())
 		return
 	}
 	defer resp.Body.Close()
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if !bytes.Contains(body, []byte(website.ContainString)) {
-		notify(systemConfig, website, "ERROR: " + website.URL, "It doesn't find the string:\n" + website.ContainString)
+		notify(false, website, "ERROR: " + website.URL, "It doesn't find the string:\n" + website.ContainString)
 		return
 	}
+
+	notify(true, website, "OK: " + website.URL, "OK")
 }
 
 func createTemplateConfigs(){
@@ -104,7 +132,7 @@ func createTemplateConfigs(){
 	if err != nil {
 		panic(err)
 	}
-	ioutil.WriteFile(SystemConfig + ".example.yml", out, 0600)
+	ioutil.WriteFile(SystemConfigFileName + ".example.yml", out, 0600)
 
 	var website1 WebSite
 	website1.URL = "http://example.com"
@@ -126,26 +154,43 @@ times`
 	if err != nil {
 		panic(err)
 	}
-	ioutil.WriteFile(WebsitesConfig + ".example.yml", out, 0600)
+	ioutil.WriteFile(WebsitesConfigFileName + ".example.yml", out, 0600)
 }
 
-func notify(system System, website WebSite, subject, body string){
-	body += "\n\n" + website.Description
+func notify(ok bool, website WebSite, subject, body string){
+	globalStatus.mutex.Lock()
+	state := globalStatus.Websites[website.URL]
+	globalStatus.mutex.Unlock()
 
-	sendEmails(system, summStringsArrays(system.SendTo, website.SendTo), subject, body)
+	if state.OK != ok || !state.NotFirstTime {
+		state.OK = ok
+		state.TextMessages = append(state.TextMessages, body)
+		state.TimeMessages = append(state.TimeMessages, time.Now())
+		state.SubjectMessages = append(state.SubjectMessages, subject)
+		state.NotFirstTime = true
+
+		globalStatus.mutex.Lock()
+		globalStatus.Websites[website.URL] = state
+		globalStatus.mutex.Unlock()
+
+
+		body += "\n\n" + website.Description
+		sendEmails(summStringsArrays(systemConfig.SendTo, website.SendTo), subject, body)
+	}
 }
 
-func sendEmails(system System, emails []string, subject, body string){
-	message := `From: ` + system.EmailFrom + "\n"
+func sendEmails(emails []string, subject, body string){
+	message := `From: ` + systemConfig.EmailFrom + "\n"
 	message += "To: " + strings.Join(emails, ",") + "\n"
 	message += "Subject: " + subject + "\n"
 	message += `Content-Type: text/plain; charset="utf-8"` + "\n"
 	message += "\n"
 	message += body
 
-	auth := smtp.PlainAuth("", system.EmailSmtpLogin, system.EmailSmtpPassword, system.EmailSmtpHost)
+	auth := smtp.PlainAuth("", systemConfig.EmailSmtpLogin, systemConfig.EmailSmtpPassword, systemConfig.EmailSmtpHost)
 	log.Println("Send email to:", emails)
-	err := smtp.SendMail(system.EmailSmtpHost + ":" + system.EmailSmtpPort, auth, system.EmailFrom, emails, []byte(message))
+	log.Println(systemConfig.EmailSmtpHost + ":" + systemConfig.EmailSmtpPort)
+	err := smtp.SendMail(systemConfig.EmailSmtpHost + ":" + systemConfig.EmailSmtpPort, auth, systemConfig.EmailFrom, emails, []byte(message))
 	if err != nil {
 		log.Println("Can't send email:", err)
 	}
@@ -153,7 +198,7 @@ func sendEmails(system System, emails []string, subject, body string){
 
 /*
 Combine all strings from sarrs without duplicates.
-Order of strings undefined.
+Order of result strings undefined.
  */
 func summStringsArrays(sarrs ...[]string) []string {
 	sMap := make(map[string]bool)
