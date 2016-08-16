@@ -44,7 +44,7 @@ func (this *Status) Clean() {
 	this.mutex.Lock()
 	defer this.mutex.Unlock()
 
-	oldDate := time.Now().Add(-time.Hour * 48)
+	oldDate := time.Now().Add(-time.Hour * 24)
 
 	newMap := make(map[string]WebSiteStatus)
 	for url, state := range this.Websites {

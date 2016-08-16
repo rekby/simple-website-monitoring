@@ -8,7 +8,6 @@ import (
 	"log"
 	"net/http"
 	"net/smtp"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -41,7 +40,7 @@ func main() {
 	bytesArr, err := ioutil.ReadFile(SystemConfigFileName)
 	if err != nil {
 		createTemplateConfigs()
-		os.Stderr.WriteString("Can't read system config: " + SystemConfigFileName + "\n" + err.Error() + "\n")
+		log.Println("Can't read system config: " + SystemConfigFileName + "\n" + err.Error())
 		return
 	}
 
@@ -49,7 +48,7 @@ func main() {
 	err = yaml.Unmarshal(bytesArr, &systemConfig)
 	if err != nil {
 		createTemplateConfigs()
-		os.Stderr.WriteString("Can't parse system config: " + SystemConfigFileName + "\n" + err.Error() + "\n")
+		log.Println("Can't parse system config: " + SystemConfigFileName + "\n" + err.Error())
 	}
 
 	// read websites config
