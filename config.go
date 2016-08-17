@@ -18,11 +18,12 @@ type System struct {
 
 type WebSite struct {
 	URL             string        `yaml:"URL"`
-	ContainString   string        `yaml:"ContainString"`
+	ContainString   string        `yaml:"ContainString,omitempty"`
 	SendTo          []string      `yaml:"SendTo,omitempty"`
 	SendStatisticTo []string      `yaml:"SendStatisticTo,omitempty"`
 	Timeout         time.Duration `yaml:"Timeout,omitempty"`
 	Description     string        `yaml:"Description,omitempty"`
+	HttpStatusCode  int           `yaml:"HttpStatusCode,omitempty"`
 }
 
 type WebSiteStatus struct {

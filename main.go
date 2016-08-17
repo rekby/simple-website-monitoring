@@ -106,11 +106,26 @@ func main() {
 func checkWebsite(website WebSite) {
 	httpClient := http.Client{}
 
+	// doesn't work with redirect when check status code
+	if website.HttpStatusCode != 0 {
+		httpClient.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		}
+	}
+
 	httpClient.Timeout = website.Timeout
 	if httpClient.Timeout == 0 {
 		httpClient.Timeout = systemConfig.Timeout
 	}
 	resp, err := httpClient.Get(website.URL)
+
+	if website.HttpStatusCode != 0 {
+		if resp.StatusCode != website.HttpStatusCode {
+			notify(false, website, "ERROR: " + website.URL, fmt.Sprintf("Status code is '%v' instead of '%v'", resp.StatusCode, website.HttpStatusCode))
+			return
+		}
+	}
+
 	if err != nil {
 		notify(false, website, "ERROR: "+website.URL, "Can't get page:\n"+err.Error())
 		return
@@ -161,7 +176,12 @@ times
 http://test.example2.com
 `
 
-	websites := []WebSite{website1, website2}
+	website3 := WebSite{}
+	website3.URL = "http://example3.com"
+	website3.HttpStatusCode = 301
+	website3.Description = "Check redirect code"
+
+	websites := []WebSite{website1, website2, website3}
 	out, err = yaml.Marshal(websites)
 	if err != nil {
 		panic(err)
