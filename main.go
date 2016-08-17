@@ -77,10 +77,10 @@ func main() {
 	var wait sync.WaitGroup
 	for _, website := range websitesConfig {
 		wait.Add(1)
-		go func() {
-			checkWebsite(website)
+		go func(local WebSite) {
+			checkWebsite(local)
 			wait.Done()
-		}()
+		}(website)
 	}
 
 	wait.Wait()
@@ -119,7 +119,7 @@ func checkWebsite(website WebSite) {
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if !bytes.Contains(body, []byte(website.ContainString)) {
-		notify(false, website, "ERROR: "+website.URL, "It doesn't find the string:\n"+website.ContainString)
+		notify(false, website, "ERROR: "+website.URL, "It doesn't find the string: '"+website.ContainString + "'")
 		return
 	}
 
@@ -157,7 +157,9 @@ func createTemplateConfigs() {
 	website2.Description = `Long text description
 with newlines
 many
-times`
+times
+http://test.example2.com
+`
 
 	websites := []WebSite{website1, website2}
 	out, err = yaml.Marshal(websites)
@@ -198,7 +200,7 @@ func sendEmails(emails []string, subject, body string) {
 	message += body
 
 	auth := smtp.PlainAuth("", systemConfig.EmailSmtpLogin, systemConfig.EmailSmtpPassword, systemConfig.EmailSmtpHost)
-	log.Println("Send email to:", emails)
+	log.Printf("Send email '%v' to: %v\n", subject, emails)
 	log.Println(systemConfig.EmailSmtpHost + ":" + systemConfig.EmailSmtpPort)
 	err := smtp.SendMail(systemConfig.EmailSmtpHost+":"+systemConfig.EmailSmtpPort, auth, systemConfig.EmailFrom, emails, []byte(message))
 	if err != nil {
@@ -217,8 +219,14 @@ func sendStatistic() {
 		if !state.OK {
 			stringOk = "FAILED"
 		}
-		appendMessage := fmt.Sprintf("Website: %v; State: %v; Last check: %v; Messages: %v\n", website.URL, stringOk,
-			state.LastCheckTime, strings.Join(state.TextMessages, ", "))
+		appendLines := []string{fmt.Sprintf("Website: %v; State: %v; Last check: %v;\n", website.URL, stringOk,
+			state.LastCheckTime)}
+		for i := range state.TextMessages {
+			appendLines = append(appendLines, state.TimeMessages[i].String(), " ", state.SubjectMessages[i],
+			": ", state.TextMessages[i], "\n")
+		}
+		appendLines = append(appendLines, "\n")
+		appendMessage := strings.Join(appendLines, "")
 
 		for _, email := range summStringsArrays(systemConfig.SendStatisticTo, website.SendStatisticTo) {
 			messages[email] = messages[email] + appendMessage

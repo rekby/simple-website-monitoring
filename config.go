@@ -20,9 +20,9 @@ type WebSite struct {
 	URL             string        `yaml:"URL"`
 	ContainString   string        `yaml:"ContainString"`
 	SendTo          []string      `yaml:"SendTo,omitempty"`
-	SendStatisticTo []string      `yaml:"SendStatisticTo"`
+	SendStatisticTo []string      `yaml:"SendStatisticTo,omitempty"`
 	Timeout         time.Duration `yaml:"Timeout,omitempty"`
-	Description     string        `yaml:"Description"`
+	Description     string        `yaml:"Description,omitempty"`
 }
 
 type WebSiteStatus struct {

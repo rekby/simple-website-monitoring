@@ -9,11 +9,14 @@
   - bob@jack.com
   Timeout: 1m12s
   Description: Short description
+
 - URL: https://example2.com
   ContainString: fff
-  SendStatisticTo: []
-  Description: |-
+  SendStatisticTo:
+  - t@f1f2.ru
+  Description: |
     Long text description
     with newlines
     many
     times
+    http://test.example2.com
