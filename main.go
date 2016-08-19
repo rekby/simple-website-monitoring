@@ -118,6 +118,11 @@ func checkWebsite(website WebSite) {
 		httpClient.Timeout = systemConfig.Timeout
 	}
 	resp, err := httpClient.Get(website.URL)
+	if err != nil {
+		notify(false, website, "ERROR: "+website.URL, "Can't get page:\n"+err.Error())
+		return
+	}
+	defer resp.Body.Close()
 
 	if website.HttpStatusCode != 0 {
 		if resp.StatusCode != website.HttpStatusCode {
@@ -126,11 +131,6 @@ func checkWebsite(website WebSite) {
 		}
 	}
 
-	if err != nil {
-		notify(false, website, "ERROR: "+website.URL, "Can't get page:\n"+err.Error())
-		return
-	}
-	defer resp.Body.Close()
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if !bytes.Contains(body, []byte(website.ContainString)) {
