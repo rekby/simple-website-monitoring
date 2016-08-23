@@ -36,6 +36,7 @@ type WebSiteStatus struct {
 	TimeMessages    []time.Time
 	OK              bool
 	NotifyWasSent   bool
+	NotifyOkWasSent bool
 	LastCheckTime   time.Time
 	LastErrorsCount int
 }

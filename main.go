@@ -256,18 +256,11 @@ func notify(ok bool, website WebSite, body string) {
 		skipErrorsCount = systemConfig.SkipErrorsCount
 	}
 
-	if ok != state.OK {
-		state.NotifyWasSent = false
-	}
 	if ok {
 		state.LastErrorsCount = 0
 	}
 
-	/* send message when
-	1. Check have OK result after fail checks (or check first time)
-	2. Last n checks was error, where n more then skipErrorCount
-	 */
-	if !state.NotifyWasSent  &&  (ok || state.LastErrorsCount > skipErrorsCount) {
+	if (ok && !state.NotifyOkWasSent) || (!ok && state.LastErrorsCount > skipErrorsCount && !state.NotifyWasSent) {
 		state.OK = ok
 		state.TextMessages = append(state.TextMessages, body)
 		state.TimeMessages = append(state.TimeMessages, time.Now())
@@ -276,6 +269,14 @@ func notify(ok bool, website WebSite, body string) {
 
 		body += "\n\n" + website.Description
 		sendEmails(summStringsArrays(systemConfig.SendTo, website.SendTo), subject, body)
+
+		if ok {
+			state.NotifyWasSent = false
+			state.NotifyOkWasSent = true
+		} else {
+			state.NotifyWasSent = true
+			state.NotifyOkWasSent = false
+		}
 	}
 	globalStatus.mutex.Lock()
 	globalStatus.Websites[website.URL] = state
