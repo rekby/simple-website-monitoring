@@ -14,6 +14,7 @@ type System struct {
 	SendTo            []string      `yaml:"SendTo"`
 	SendStatisticTo   []string      `yaml:"SendStatisticTo"`
 	Timeout           time.Duration `yaml:"Timeout"`
+	SkipErrorsCount   int           `yaml:"SkipErrorsCount"`
 }
 
 type WebSite struct {
@@ -24,6 +25,7 @@ type WebSite struct {
 	Timeout         time.Duration `yaml:"Timeout,omitempty"`
 	Description     string        `yaml:"Description,omitempty"`
 	HttpStatusCode  int           `yaml:"HttpStatusCode,omitempty"`
+	SkipErrorsCount int           `yaml:"SkipErrorsCount,omitempty"`
 }
 
 type WebSiteStatus struct {
@@ -31,8 +33,9 @@ type WebSiteStatus struct {
 	SubjectMessages []string
 	TimeMessages    []time.Time
 	OK              bool
-	NotFirstTime    bool
+	NotifyWasSent   bool
 	LastCheckTime   time.Time
+	LastErrorsCount int
 }
 
 type Status struct {

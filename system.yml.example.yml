@@ -10,3 +10,4 @@ SendStatisticTo:
 - aaa@bbb.com
 - asdf@bbb.org
 Timeout: 10s
+SkipErrorsCount: 2

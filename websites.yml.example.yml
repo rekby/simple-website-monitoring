@@ -9,6 +9,7 @@
   - bob@jack.com
   Timeout: 1m12s
   Description: Short description
+  SkipErrorsCount: 5
 - URL: https://example2.com
   ContainString: fff
   Description: |
@@ -18,6 +19,5 @@
     times
     http://test.example2.com
 - URL: http://example3.com
-  ContainString: ""
   Description: Check redirect code
   HttpStatusCode: 301

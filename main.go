@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 	"fmt"
+	"errors"
 )
 
 const (
@@ -104,41 +105,48 @@ func main() {
 }
 
 func checkWebsite(website WebSite) {
+	ok, err := httpCheck(website.URL, website.ContainString, website.HttpStatusCode, website.Timeout)
+	// notify(false, website, "ERROR: "+website.URL, "Can't get page:\n"+err.Error())
+	var errorText string
+	if err != nil {
+		errorText = err.Error()
+	}
+	notify(ok, website, errorText)
+}
+
+func httpCheck(url, needle string, httpCode int, timeout time.Duration)(bool, error){
 	httpClient := http.Client{}
 
 	// doesn't work with redirect when check status code
-	if website.HttpStatusCode != 0 {
+	if httpCode != 0 {
 		httpClient.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 			return http.ErrUseLastResponse
 		}
 	}
 
-	httpClient.Timeout = website.Timeout
 	if httpClient.Timeout == 0 {
 		httpClient.Timeout = systemConfig.Timeout
+	} else {
+		httpClient.Timeout = timeout
 	}
-	resp, err := httpClient.Get(website.URL)
+	resp, err := httpClient.Get(url)
 	if err != nil {
-		notify(false, website, "ERROR: "+website.URL, "Can't get page:\n"+err.Error())
-		return
+		return false, errors.New("Can't get page:\n"+err.Error())
 	}
 	defer resp.Body.Close()
 
-	if website.HttpStatusCode != 0 {
-		if resp.StatusCode != website.HttpStatusCode {
-			notify(false, website, "ERROR: " + website.URL, fmt.Sprintf("Status code is '%v' instead of '%v'", resp.StatusCode, website.HttpStatusCode))
-			return
+	if httpCode != 0 {
+		if resp.StatusCode != httpCode {
+			return false, fmt.Errorf("Status code is '%v' instead of '%v'", resp.StatusCode, httpCode)
 		}
 	}
 
-
 	body, err := ioutil.ReadAll(resp.Body)
-	if !bytes.Contains(body, []byte(website.ContainString)) {
-		notify(false, website, "ERROR: "+website.URL, "It doesn't find the string: '"+website.ContainString + "'")
-		return
+	if !bytes.Contains(body, []byte(needle)) {
+		return false, errors.New("It doesn't find the string: '"+needle + "'")
 	}
 
-	notify(true, website, "OK: "+website.URL, "OK")
+	return true, nil
 }
 
 func createTemplateConfigs() {
@@ -151,6 +159,7 @@ func createTemplateConfigs() {
 	system.Timeout = time.Second * 10
 	system.SendTo = []string{"aaa@bbb.com", "ccc@ddd.com"}
 	system.SendStatisticTo = []string{"aaa@bbb.com", "asdf@bbb.org"}
+	system.SkipErrorsCount = 2
 
 	out, err := yaml.Marshal(system)
 	if err != nil {
@@ -165,6 +174,7 @@ func createTemplateConfigs() {
 	website1.Description = "Short description"
 	website1.SendTo = []string{"asd@mail.com", "test@gmail.com", "sss@ya.ru"}
 	website1.SendStatisticTo = []string{"asd@mail.com", "bob@jack.com"}
+	website1.SkipErrorsCount = 5
 
 	var website2 WebSite
 	website2.URL = "https://example2.com"
@@ -189,19 +199,47 @@ http://test.example2.com
 	ioutil.WriteFile(WebsitesConfigFileName+".example.yml", out, 0600)
 }
 
-func notify(ok bool, website WebSite, subject, body string) {
+func notify(ok bool, website WebSite, body string) {
+	var subject string
+	if ok {
+		subject = "OK: " + website.URL
+	} else {
+		subject = "ERROR: " + website.URL
+	}
+
 	globalStatus.mutex.Lock()
 	state := globalStatus.Websites[website.URL]
 	globalStatus.mutex.Unlock()
+	if !ok {
+		state.LastErrorsCount++
+	}
 
 	state.LastCheckTime = time.Now()
 
-	if state.OK != ok || !state.NotFirstTime {
+	var skipErrorsCount int
+	if website.SkipErrorsCount != 0 {
+		skipErrorsCount = website.SkipErrorsCount
+	} else {
+		skipErrorsCount = systemConfig.SkipErrorsCount
+	}
+
+	if ok != state.OK {
+		state.NotifyWasSent = false
+	}
+	if ok {
+		state.LastErrorsCount = 0
+	}
+
+	/* send message when
+	1. Check have OK result after fail checks (or check first time)
+	2. Last n checks was error, where n more then skipErrorCount
+	 */
+	if !state.NotifyWasSent  &&  (ok || state.LastErrorsCount > skipErrorsCount) {
 		state.OK = ok
 		state.TextMessages = append(state.TextMessages, body)
 		state.TimeMessages = append(state.TimeMessages, time.Now())
 		state.SubjectMessages = append(state.SubjectMessages, subject)
-		state.NotFirstTime = true
+		state.NotifyWasSent = true
 
 		body += "\n\n" + website.Description
 		sendEmails(summStringsArrays(systemConfig.SendTo, website.SendTo), subject, body)
