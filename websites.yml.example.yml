@@ -22,3 +22,4 @@
 - URL: http://example3.com
   Description: Check redirect code
   HttpStatusCode: 301
+  SkipErrorsCount: -1

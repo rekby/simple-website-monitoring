@@ -222,6 +222,7 @@ http://test.example2.com
 	website3.URL = "http://example3.com"
 	website3.HttpStatusCode = 301
 	website3.Description = "Check redirect code"
+	website3.SkipErrorsCount = -1
 
 	websites := []WebSite{website1, website2, website3}
 	out, err = yaml.Marshal(websites)
