@@ -15,6 +15,7 @@ type System struct {
 	SendStatisticTo   []string      `yaml:"SendStatisticTo"`
 	Timeout           time.Duration `yaml:"Timeout"`
 	SkipErrorsCount   int           `yaml:"SkipErrorsCount"`
+	CheckInterval     time.Duration `yaml:"CheckInterval"`
 }
 
 type WebSite struct {
@@ -26,6 +27,7 @@ type WebSite struct {
 	Description     string        `yaml:"Description,omitempty"`
 	HttpStatusCode  int           `yaml:"HttpStatusCode,omitempty"`
 	SkipErrorsCount int           `yaml:"SkipErrorsCount,omitempty"`
+	CheckInterval   time.Duration `yaml:"CheckInterval,omitempty"`
 }
 
 type WebSiteStatus struct {

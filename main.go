@@ -13,12 +13,14 @@ import (
 	"time"
 	"fmt"
 	"errors"
+	"math/rand"
 )
 
 const (
 	SystemConfigFileName   = "system.yml"
 	WebsitesConfigFileName = "websites.yml"
 	StatisticFileName      = "stat.yml"
+	CheckTimeShiftDivider = 5 // CheckInterval / CheckTimeShiftDivider. 5 = 20% shift
 )
 
 var (
@@ -105,8 +107,36 @@ func main() {
 }
 
 func checkWebsite(website WebSite) {
+	// Calc if need check by time.
+	globalStatus.mutex.Lock()
+	state := globalStatus.Websites[website.URL]
+	globalStatus.mutex.Unlock()
+
+	checkInterval := systemConfig.CheckInterval
+	if website.CheckInterval != 0 {
+		checkInterval = website.CheckInterval
+	}
+
+	if checkInterval != 0 {
+		var nextCheck time.Time
+		var pause time.Duration
+		emptyTime := time.Time{}
+		if state.LastCheckTime == emptyTime {
+			pause = time.Duration(rand.Int63n(int64(checkInterval)))
+		} else {
+			rnd := rand.New( rand.NewSource(state.LastCheckTime.UnixNano()))
+			pauseShift := website.CheckInterval / CheckTimeShiftDivider * 2// *2 - for +/- shift
+			pauseShift = time.Duration(rnd.Int63n(int64(pauseShift)))
+			pauseShift -= website.CheckInterval / CheckTimeShiftDivider
+			pause = website.CheckInterval + pauseShift
+		}
+		nextCheck = time.Now().Add(pause)
+		if time.Now().Before(nextCheck) {
+			return // Skip check by time interval
+		}
+	}
+
 	ok, err := httpCheck(website.URL, website.ContainString, website.HttpStatusCode, website.Timeout)
-	// notify(false, website, "ERROR: "+website.URL, "Can't get page:\n"+err.Error())
 	var errorText string
 	if err != nil {
 		errorText = err.Error()
@@ -160,6 +190,7 @@ func createTemplateConfigs() {
 	system.SendTo = []string{"aaa@bbb.com", "ccc@ddd.com"}
 	system.SendStatisticTo = []string{"aaa@bbb.com", "asdf@bbb.org"}
 	system.SkipErrorsCount = 2
+	system.CheckInterval = 0
 
 	out, err := yaml.Marshal(system)
 	if err != nil {
@@ -175,6 +206,7 @@ func createTemplateConfigs() {
 	website1.SendTo = []string{"asd@mail.com", "test@gmail.com", "sss@ya.ru"}
 	website1.SendStatisticTo = []string{"asd@mail.com", "bob@jack.com"}
 	website1.SkipErrorsCount = 5
+	website1.CheckInterval = time.Hour*48 + time.Minute * 5
 
 	var website2 WebSite
 	website2.URL = "https://example2.com"

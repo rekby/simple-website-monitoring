@@ -10,6 +10,7 @@
   Timeout: 1m12s
   Description: Short description
   SkipErrorsCount: 5
+  CheckInterval: 48h5m0s
 - URL: https://example2.com
   ContainString: fff
   Description: |

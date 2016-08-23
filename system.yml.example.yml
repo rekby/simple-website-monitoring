@@ -11,3 +11,4 @@ SendStatisticTo:
 - asdf@bbb.org
 Timeout: 10s
 SkipErrorsCount: 2
+CheckInterval: 0s
