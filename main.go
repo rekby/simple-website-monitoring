@@ -117,7 +117,7 @@ func checkWebsite(website WebSite) {
 		checkInterval = website.CheckInterval
 	}
 
-	if checkInterval != 0 {
+	if checkInterval > 0 {
 		var nextCheck time.Time
 		var pause time.Duration
 		emptyTime := time.Time{}
